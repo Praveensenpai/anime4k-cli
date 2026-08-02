@@ -22,7 +22,7 @@ select_option() {
     exec 3< /dev/tty 2>/dev/null || true
 
     printf "\033[?25l" >&2
-    cleanup_cursor() { printf "\033[?25h" >&2; stty echo icanon 2>/dev/null || true; }
+    cleanup_cursor() { printf "\033[?25h" >&2; stty -F /dev/tty echo icanon 2>/dev/null || true; }
     trap cleanup_cursor EXIT INT TERM
 
     while true; do
@@ -36,13 +36,13 @@ select_option() {
             fi
         done
 
-        stty -echo -icanon min 1 time 0 2>/dev/null || true
+        stty -F /dev/tty -echo -icanon min 1 time 0 2>/dev/null || true
         IFS= read -r -n 1 -u 3 key 2>/dev/null || true
         if [ "$key" = $'\x1b' ]; then
             read -r -n 2 -u 3 rest 2>/dev/null || true
             key="$key$rest"
         fi
-        stty echo icanon 2>/dev/null || true
+        stty -F /dev/tty echo icanon 2>/dev/null || true
 
         case "$key" in
             $'\x1b[A'|$'\x1bOA') # Up
