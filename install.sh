@@ -1,4 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+# Anime4K GLSL Shaders & Hotkeys Installer for mpv
 
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
@@ -6,50 +8,155 @@ PURPLE='\033[0;35m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
-BOLD='\033[1m'
 NC='\033[0m'
 
-echo -e "${PURPLE}🚀 Installing anime4k-mpv-installer...${NC}\n"
+TARGET="$HOME/.config/mpv"
 
-BIN_DIR="$HOME/.local/bin"
-mkdir -p "$BIN_DIR"
+echo -e "${PURPLE}📺  Installing Anime4K shaders for mpv...${NC}"
 
-RAW_URL="https://raw.githubusercontent.com/Praveensenpai/anime4k-mpv-installer/main/bin/anime4k-mpv-installer"
-
-# Check if running directly from a local repository clone
-LOCAL_DIR=""
-if [ -n "${BASH_SOURCE[0]}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
-    LOCAL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
-fi
-
-if [ -n "$LOCAL_DIR" ] && [ -f "$LOCAL_DIR/PKGBUILD" ] && [ -f "$LOCAL_DIR/bin/anime4k-mpv-installer" ]; then
-    cp "$LOCAL_DIR/bin/anime4k-mpv-installer" "$BIN_DIR/anime4k-mpv-installer"
-else
-    echo -e "${BLUE}📦 Downloading anime4k-mpv-installer binary from GitHub...${NC}"
-    curl -sSL -H 'Cache-Control: no-cache' "$RAW_URL" -o "$BIN_DIR/anime4k-mpv-installer"
-fi
-
-if [ ! -f "$BIN_DIR/anime4k-mpv-installer" ] || [ ! -s "$BIN_DIR/anime4k-mpv-installer" ]; then
-    echo -e "${RED}❌ Error: Failed to download anime4k-mpv-installer binary!${NC}"
+if ! command -v unzip &> /dev/null; then
+    echo -e "${RED}❌ Error: unzip is not installed!${NC}"
     exit 1
 fi
 
-chmod +x "$BIN_DIR/anime4k-mpv-installer"
-echo -e "${GREEN}✔ Installed anime4k-mpv-installer to ${BIN_DIR}/anime4k-mpv-installer${NC}"
+PRESET="${ANIME4K_PRESET:-}"
 
-# Shell alias setup
-SHELL_CONFIGS=("$HOME/.bashrc" "$HOME/.zshrc")
-ALIAS_LINE="alias anime4k-mpv-installer='$HOME/.local/bin/anime4k-mpv-installer'"
-
-for config in "${SHELL_CONFIGS[@]}"; do
-    if [ -f "$config" ]; then
-        if ! grep -q "alias anime4k-mpv-installer=" "$config" 2>/dev/null; then
-            echo "" >> "$config"
-            echo "$ALIAS_LINE" >> "$config"
-            echo -e "${BLUE}📝 Added anime4k-mpv-installer alias to $config${NC}"
-        fi
+if [ -z "$PRESET" ]; then
+    HAS_TTY=0
+    INPUT_SRC=""
+    if [ -t 0 ]; then
+        HAS_TTY=1
+        INPUT_SRC="/dev/stdin"
+    elif exec 3< /dev/tty 2>/dev/null; then
+        HAS_TTY=1
+        INPUT_SRC="/dev/tty"
+        exec 3<&-
     fi
-done
 
-echo -e "\n${GREEN}${BOLD}🎉 anime4k-mpv-installer setup completed!${NC}"
-echo -e "Run it anytime with: ${CYAN}anime4k-mpv-installer${NC}"
+    if [ "$HAS_TTY" -eq 1 ]; then
+        echo -e "\n${YELLOW}🎮 Select Anime4K GPU preset:${NC}"
+        echo -e "  ${CYAN}1)${NC} Higher-end GPU (GTX 1080, RTX 2070/3060+, RX 590/5700XT/6600XT+) ${GREEN}[HQ - VL Shaders]${NC}"
+        echo -e "  ${CYAN}2)${NC} Lower-end GPU (GTX 980, GTX 1060, RX 570, Integrated GPUs) ${YELLOW}[Fast - M/S Shaders]${NC}"
+        
+        read -r -p "Enter choice [1/2] (default: 1): " CHOICE < "$INPUT_SRC" 2>/dev/null || CHOICE="1"
+        case "$CHOICE" in
+            2) PRESET="low" ;;
+            *) PRESET="high" ;;
+        esac
+    else
+        PRESET="high"
+    fi
+fi
+
+if [ "$PRESET" = "low" ]; then
+    URL="https://github.com/Tama47/Anime4K/releases/download/v4.0.1/GLSL_Mac_Linux_Low-end.zip"
+    PRESET_NAME="Lower-end GPU (Fast)"
+    MPV_GLSL_LINE='glsl-shaders="~~/shaders/Anime4K_Clamp_Highlights.glsl:~~/shaders/Anime4K_Restore_CNN_M.glsl:~~/shaders/Anime4K_Upscale_CNN_x2_M.glsl:~~/shaders/Anime4K_AutoDownscalePre_x2.glsl:~~/shaders/Anime4K_AutoDownscalePre_x4.glsl:~~/shaders/Anime4K_Upscale_CNN_x2_S.glsl"'
+    HEADER_COMMENT="# Optimized shaders for lower-end GPU: Mode A (Fast)"
+else
+    URL="https://github.com/Tama47/Anime4K/releases/download/v4.0.1/GLSL_Mac_Linux_High-end.zip"
+    PRESET_NAME="Higher-end GPU (HQ)"
+    MPV_GLSL_LINE='glsl-shaders="~~/shaders/Anime4K_Clamp_Highlights.glsl:~~/shaders/Anime4K_Restore_CNN_VL.glsl:~~/shaders/Anime4K_Upscale_CNN_x2_VL.glsl:~~/shaders/Anime4K_AutoDownscalePre_x2.glsl:~~/shaders/Anime4K_AutoDownscalePre_x4.glsl:~~/shaders/Anime4K_Upscale_CNN_x2_M.glsl"'
+    HEADER_COMMENT="# Optimized shaders for higher-end GPU: Mode A (HQ)"
+fi
+
+echo -e "${GREEN}✨ Selected preset: ${PRESET_NAME}${NC}"
+echo -e "${BLUE}📂 Ensuring ${TARGET} exists...${NC}"
+mkdir -p "$TARGET"
+
+TMP_DIR=$(mktemp -d)
+TARGET_FILE="$TMP_DIR/Anime4K.zip"
+
+echo -e "${BLUE}📦 Downloading Anime4K GLSL package...${NC}"
+
+python3 - "$URL" "$TARGET_FILE" << 'PYEOF'
+import sys, urllib.request, time
+
+url, output_file = sys.argv[1], sys.argv[2]
+
+def format_size(bytes_num):
+    if bytes_num >= 1024**2:
+        return f"{bytes_num / (1024**2):.1f} MB"
+    elif bytes_num >= 1024:
+        return f"{bytes_num / 1024:.0f} KB"
+    return f"{bytes_num} B"
+
+req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+with urllib.request.urlopen(req) as response, open(output_file, 'wb') as out:
+    total_size = int(response.headers.get('Content-Length', 0))
+    downloaded = 0
+    import shutil
+    start_time = time.time()
+    last_update = 0
+    color_cyan, color_green, color_dim, color_bold, color_reset = "\033[36m", "\033[32m", "\033[2m", "\033[1m", "\033[0m"
+
+    while True:
+        chunk = response.read(65536)
+        if not chunk:
+            break
+        out.write(chunk)
+        downloaded += len(chunk)
+        now = time.time()
+        if now - last_update > 0.08 or downloaded == total_size:
+            last_update = now
+            elapsed = now - start_time
+            speed = downloaded / elapsed if elapsed > 0 else 0
+            percent = (downloaded / total_size) * 100 if total_size > 0 else 0
+            
+            term_cols = shutil.get_terminal_size((80, 24)).columns
+            d_str, t_str, s_str = format_size(downloaded), format_size(total_size), f"{format_size(speed)}/s"
+            overhead = 35 + len(d_str) + len(t_str) + len(s_str)
+            bar_length = max(10, term_cols - overhead)
+            
+            filled_len = int(bar_length * downloaded // total_size) if total_size > 0 else 0
+            bar = '━' * filled_len + color_dim + '━' * (bar_length - filled_len) + color_reset
+            sys.stdout.write(f"\r\033[K  {color_green}⠋{color_reset} [{color_cyan}{bar}{color_reset}] {color_bold}{percent:5.1f}%{color_reset}  ({d_str} / {t_str})  {color_cyan}{s_str}{color_reset}")
+            sys.stdout.flush()
+
+sys.stdout.write("\n")
+PYEOF
+
+set -eo pipefail
+
+if [ ! -f "$TARGET_FILE" ] || [ ! -s "$TARGET_FILE" ]; then
+    echo -e "${RED}❌ Download failed or archive is empty!${NC}"
+    rm -rf "$TMP_DIR"
+    exit 1
+fi
+
+unzip -q -o "$TARGET_FILE" -d "$TMP_DIR"
+
+echo -e "${BLUE}📂 Copying Anime4K shaders to ${TARGET}/shaders...${NC}"
+mkdir -p "$TARGET/shaders"
+cp -rf "$TMP_DIR"/shaders/* "$TARGET/shaders/" 2>/dev/null || true
+
+# Handle input.conf safely: preserve existing custom keybindings
+if [ -f "$TARGET/input.conf" ]; then
+    if ! grep -q "Anime4K" "$TARGET/input.conf" 2>/dev/null; then
+        echo -e "${BLUE}📝 Appending Anime4K hotkeys to existing ${TARGET}/input.conf...${NC}"
+        echo "" >> "$TARGET/input.conf"
+        cat "$TMP_DIR/input.conf" >> "$TARGET/input.conf"
+    else
+        echo -e "${BLUE}ℹ️ Anime4K hotkeys already present in ${TARGET}/input.conf${NC}"
+    fi
+else
+    echo -e "${BLUE}📝 Creating ${TARGET}/input.conf with Anime4K hotkeys...${NC}"
+    cp "$TMP_DIR/input.conf" "$TARGET/input.conf"
+fi
+
+# Configure Anime4K default shader preset in mpv.conf
+if [ -f "$TARGET/mpv.conf" ] && grep -q "glsl-shaders=" "$TARGET/mpv.conf" 2>/dev/null; then
+    echo -e "${BLUE}⚙️ Updating glsl-shaders preset in ${TARGET}/mpv.conf...${NC}"
+    sed -i "s|^#* *glsl-shaders=.*|${MPV_GLSL_LINE}|" "$TARGET/mpv.conf"
+    sed -i "s|^# Optimized shaders.*|${HEADER_COMMENT}|" "$TARGET/mpv.conf"
+else
+    echo -e "${BLUE}⚙️ Appending glsl-shaders preset to ${TARGET}/mpv.conf...${NC}"
+    cat << INNER_EOF >> "$TARGET/mpv.conf"
+
+${HEADER_COMMENT}
+${MPV_GLSL_LINE}
+INNER_EOF
+fi
+
+rm -rf "$TMP_DIR"
+echo -e "${GREEN}🎉 Anime4K shaders (${PRESET_NAME}) installed and configured for mpv!${NC}"
