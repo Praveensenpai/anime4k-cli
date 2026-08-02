@@ -12,7 +12,66 @@ NC='\033[0m'
 
 TARGET="$HOME/.config/mpv"
 
-echo -e "${PURPLE}📺  Installing Anime4K shaders for mpv...${NC}"
+# Interactive Arrow Key Selector
+select_option() {
+    local prompt="$1"
+    shift
+    local options=("$@")
+    local selected=0
+
+    exec 3< /dev/tty 2>/dev/null || true
+
+    printf "\033[?25l" >&2
+    cleanup_cursor() { printf "\033[?25h" >&2; stty echo icanon 2>/dev/null || true; }
+    trap cleanup_cursor EXIT INT TERM
+
+    while true; do
+        echo -e "\033[1;36m? \033[1;37m${prompt}\033[0;33m (Use arrow keys & Enter)\033[0m" >&2
+
+        for i in "${!options[@]}"; do
+            if [ "$i" -eq "$selected" ]; then
+                echo -e "  \033[1;32m❯ \033[7m ${options[$i]} \033[0m" >&2
+            else
+                echo -e "    \033[2m${options[$i]}\033[0m" >&2
+            fi
+        done
+
+        stty -echo -icanon min 1 time 0 2>/dev/null || true
+        IFS= read -r -n 1 -u 3 key 2>/dev/null || true
+        if [ "$key" = $'\x1b' ]; then
+            read -r -n 2 -u 3 rest 2>/dev/null || true
+            key="$key$rest"
+        fi
+        stty echo icanon 2>/dev/null || true
+
+        case "$key" in
+            $'\x1b[A'|$'\x1bOA') # Up
+                ((selected--))
+                [ "$selected" -lt 0 ] && selected=$((${#options[@]} - 1))
+                ;;
+            $'\x1b[B'|$'\x1bOB') # Down
+                ((selected++))
+                [ "$selected" -ge "${#options[@]}" ] && selected=0
+                ;;
+            ""|$'\n'|$'\r') # Enter
+                break
+                ;;
+        esac
+
+        local total_lines=$((${#options[@]} + 1))
+        for ((l=0; l<total_lines; l++)); do
+            printf "\033[1A\033[2K" >&2
+        done
+    done
+
+    cleanup_cursor
+    trap - EXIT INT TERM
+    exec 3<&- 2>/dev/null || true
+
+    echo "$selected"
+}
+
+echo -e "${PURPLE}📺  Installing Anime4K shaders for mpv...${NC}\n"
 
 if ! command -v unzip &> /dev/null; then
     echo -e "${RED}❌ Error: unzip is not installed!${NC}"
@@ -23,24 +82,16 @@ PRESET="${ANIME4K_PRESET:-}"
 
 if [ -z "$PRESET" ]; then
     HAS_TTY=0
-    INPUT_SRC=""
-    if [ -t 0 ]; then
+    if [ -t 0 ] || [ -c /dev/tty ]; then
         HAS_TTY=1
-        INPUT_SRC="/dev/stdin"
-    elif exec 3< /dev/tty 2>/dev/null; then
-        HAS_TTY=1
-        INPUT_SRC="/dev/tty"
-        exec 3<&-
     fi
 
     if [ "$HAS_TTY" -eq 1 ]; then
-        echo -e "\n${YELLOW}🎮 Select Anime4K GPU preset:${NC}"
-        echo -e "  ${CYAN}1)${NC} Higher-end GPU (GTX 1080, RTX 2070/3060+, RX 590/5700XT/6600XT+) ${GREEN}[HQ - VL Shaders]${NC}"
-        echo -e "  ${CYAN}2)${NC} Lower-end GPU (GTX 980, GTX 1060, RX 570, Integrated GPUs) ${YELLOW}[Fast - M/S Shaders]${NC}"
-        
-        read -r -p "Enter choice [1/2] (default: 1): " CHOICE < "$INPUT_SRC" 2>/dev/null || CHOICE="1"
-        case "$CHOICE" in
-            2) PRESET="low" ;;
+        CHOICE_INDEX=$(select_option "Select Anime4K GPU preset:" \
+            "Higher-end GPU (GTX 1080, RTX 2070/3060+, RX 590/5700XT+) [HQ - VL Shaders]" \
+            "Lower-end GPU (GTX 980, GTX 1060, RX 570, Integrated GPUs) [Fast - M/S Shaders]")
+        case "$CHOICE_INDEX" in
+            1) PRESET="low" ;;
             *) PRESET="high" ;;
         esac
     else
