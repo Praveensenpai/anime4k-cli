@@ -12,11 +12,9 @@ Automated Anime4K GLSL shader and keybinding installer for **mpv**.
 
 ---
 
-## 📦 Installation
+## 📦 Quick Start
 
-> ℹ️ **Note**: AUR submission (`yay -S anime4k-mpv-installer-git`) is currently pending due to temporary AUR maintenance. Please use the one-liner installer below in the meantime.
-
-### Manual / One-Liner
+Run this one-liner in your terminal:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/Praveensenpai/anime4k-mpv-installer/main/install.sh | bash
