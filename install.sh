@@ -1,162 +1,117 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
+set -e
 
 # Anime4K GLSL Shaders & Hotkeys Installer for mpv
+# Repository: https://github.com/Praveensenpai/anime4k-cli
 
-CYAN='\033[0;36m'
-GREEN='\033[0;32m'
-PURPLE='\033[0;35m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
+REPO="Praveensenpai/anime4k-cli"
+GITHUB_RELEASES="https://github.com/${REPO}/releases"
+
+# Colors
 RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
+BOLD='\033[1m'
 NC='\033[0m'
 
-TARGET="$HOME/.config/mpv"
+printf "${CYAN}${BOLD}📺 Anime4K GLSL Installer & Manager for mpv${NC}\n"
 
-echo -e "${PURPLE}📺  Installing Anime4K shaders for mpv...${NC}"
-
-if ! command -v unzip &> /dev/null; then
-    echo -e "${RED}❌ Error: unzip is not installed!${NC}"
-    exit 1
+# 1. Check if running inside local source directory with cargo
+if [ -f "./Cargo.toml" ] && command -v cargo >/dev/null 2>&1; then
+    printf "${BLUE}📂 Running from local repository via cargo...${NC}\n"
+    exec cargo run --release -- "$@"
 fi
 
-PRESET="${ANIME4K_PRESET:-}"
+# 2. Detect OS and Architecture
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+ARCH="$(uname -m)"
 
-if [ -z "$PRESET" ]; then
-    HAS_TTY=0
-    INPUT_SRC=""
-    if [ -t 0 ]; then
-        HAS_TTY=1
-        INPUT_SRC="/dev/stdin"
-    elif exec 3< /dev/tty 2>/dev/null; then
-        HAS_TTY=1
-        INPUT_SRC="/dev/tty"
-        exec 3<&-
+case "$OS" in
+    linux)
+        TARGET_OS="linux"
+        ;;
+    darwin)
+        TARGET_OS="darwin"
+        ;;
+    *)
+        printf "${RED}❌ Unsupported operating system: %s${NC}\n" "$OS"
+        printf "${YELLOW}💡 On Windows, run in PowerShell:${NC}\n"
+        printf "   irm https://raw.githubusercontent.com/%s/main/install.ps1 | iex\n" "$REPO"
+        exit 1
+        ;;
+esac
+
+case "$ARCH" in
+    x86_64|amd64)
+        TARGET_ARCH="x86_64"
+        ;;
+    aarch64|arm64)
+        TARGET_ARCH="aarch64"
+        ;;
+    *)
+        printf "${RED}❌ Unsupported architecture: %s${NC}\n" "$ARCH"
+        exit 1
+        ;;
+esac
+
+BINARY_NAME="anime4k-${TARGET_OS}-${TARGET_ARCH}"
+RELEASE_URL="${GITHUB_RELEASES}/latest/download/${BINARY_NAME}.tar.gz"
+
+INSTALL_DIR="${HOME}/.local/bin"
+mkdir -p "$INSTALL_DIR"
+TARGET_BIN="${INSTALL_DIR}/anime4k"
+
+# 3. Download release binary or build with cargo
+download_binary() {
+    TMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t 'anime4k')
+    ARCHIVE="${TMP_DIR}/anime4k.tar.gz"
+
+    printf "${BLUE}📦 Fetching pre-built binary (${TARGET_OS}-${TARGET_ARCH})...${NC}\n"
+
+    if command -v curl >/dev/null 2>&1; then
+        if curl -fsSL -o "$ARCHIVE" "$RELEASE_URL"; then
+            tar -xzf "$ARCHIVE" -C "$TMP_DIR"
+            mv "$TMP_DIR/anime4k" "$TARGET_BIN"
+            chmod +x "$TARGET_BIN"
+            rm -rf "$TMP_DIR"
+            return 0
+        fi
+    elif command -v wget >/dev/null 2>&1; then
+        if wget -qO "$ARCHIVE" "$RELEASE_URL"; then
+            tar -xzf "$ARCHIVE" -C "$TMP_DIR"
+            mv "$TMP_DIR/anime4k" "$TARGET_BIN"
+            chmod +x "$TARGET_BIN"
+            rm -rf "$TMP_DIR"
+            return 0
+        fi
     fi
 
-    if [ "$HAS_TTY" -eq 1 ]; then
-        echo -e "\n${YELLOW}🎮 Select Anime4K GPU preset:${NC}"
-        echo -e "  ${CYAN}1)${NC} Higher-end GPU (GTX 1080, RTX 2070/3060+, RX 590/5700XT/6600XT+) ${GREEN}[HQ - VL Shaders]${NC}"
-        echo -e "  ${CYAN}2)${NC} Lower-end GPU (GTX 980, GTX 1060, RX 570, Integrated GPUs) ${YELLOW}[Fast - M/S Shaders]${NC}"
-        
-        read -r -p "Enter choice [1/2] (default: 1): " CHOICE < "$INPUT_SRC" 2>/dev/null || CHOICE="1"
-        case "$CHOICE" in
-            2) PRESET="low" ;;
-            *) PRESET="high" ;;
-        esac
-    else
-        PRESET="high"
-    fi
-fi
-
-if [ "$PRESET" = "low" ]; then
-    URL="https://github.com/Tama47/Anime4K/releases/download/v4.0.1/GLSL_Mac_Linux_Low-end.zip"
-    PRESET_NAME="Lower-end GPU (Fast)"
-    MPV_GLSL_LINE='glsl-shaders="~~/shaders/Anime4K_Clamp_Highlights.glsl:~~/shaders/Anime4K_Restore_CNN_M.glsl:~~/shaders/Anime4K_Upscale_CNN_x2_M.glsl:~~/shaders/Anime4K_AutoDownscalePre_x2.glsl:~~/shaders/Anime4K_AutoDownscalePre_x4.glsl:~~/shaders/Anime4K_Upscale_CNN_x2_S.glsl"'
-    HEADER_COMMENT="# Optimized shaders for lower-end GPU: Mode A (Fast)"
-else
-    URL="https://github.com/Tama47/Anime4K/releases/download/v4.0.1/GLSL_Mac_Linux_High-end.zip"
-    PRESET_NAME="Higher-end GPU (HQ)"
-    MPV_GLSL_LINE='glsl-shaders="~~/shaders/Anime4K_Clamp_Highlights.glsl:~~/shaders/Anime4K_Restore_CNN_VL.glsl:~~/shaders/Anime4K_Upscale_CNN_x2_VL.glsl:~~/shaders/Anime4K_AutoDownscalePre_x2.glsl:~~/shaders/Anime4K_AutoDownscalePre_x4.glsl:~~/shaders/Anime4K_Upscale_CNN_x2_M.glsl"'
-    HEADER_COMMENT="# Optimized shaders for higher-end GPU: Mode A (HQ)"
-fi
-
-echo -e "${GREEN}✨ Selected preset: ${PRESET_NAME}${NC}"
-echo -e "${BLUE}📂 Ensuring ${TARGET} exists...${NC}"
-mkdir -p "$TARGET"
-
-TMP_DIR=$(mktemp -d)
-TARGET_FILE="$TMP_DIR/Anime4K.zip"
-
-echo -e "${BLUE}📦 Downloading Anime4K GLSL package...${NC}"
-
-python3 - "$URL" "$TARGET_FILE" << 'PYEOF'
-import sys, urllib.request, time
-
-url, output_file = sys.argv[1], sys.argv[2]
-
-def format_size(bytes_num):
-    if bytes_num >= 1024**2:
-        return f"{bytes_num / (1024**2):.1f} MB"
-    elif bytes_num >= 1024:
-        return f"{bytes_num / 1024:.0f} KB"
-    return f"{bytes_num} B"
-
-req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-with urllib.request.urlopen(req) as response, open(output_file, 'wb') as out:
-    total_size = int(response.headers.get('Content-Length', 0))
-    downloaded = 0
-    import shutil
-    start_time = time.time()
-    last_update = 0
-    color_cyan, color_green, color_dim, color_bold, color_reset = "\033[36m", "\033[32m", "\033[2m", "\033[1m", "\033[0m"
-
-    while True:
-        chunk = response.read(65536)
-        if not chunk:
-            break
-        out.write(chunk)
-        downloaded += len(chunk)
-        now = time.time()
-        if now - last_update > 0.08 or downloaded == total_size:
-            last_update = now
-            elapsed = now - start_time
-            speed = downloaded / elapsed if elapsed > 0 else 0
-            percent = (downloaded / total_size) * 100 if total_size > 0 else 0
-            
-            term_cols = shutil.get_terminal_size((80, 24)).columns
-            d_str, t_str, s_str = format_size(downloaded), format_size(total_size), f"{format_size(speed)}/s"
-            overhead = 35 + len(d_str) + len(t_str) + len(s_str)
-            bar_length = max(10, term_cols - overhead)
-            
-            filled_len = int(bar_length * downloaded // total_size) if total_size > 0 else 0
-            bar = '━' * filled_len + color_dim + '━' * (bar_length - filled_len) + color_reset
-            sys.stdout.write(f"\r\033[K  {color_green}⠋{color_reset} [{color_cyan}{bar}{color_reset}] {color_bold}{percent:5.1f}%{color_reset}  ({d_str} / {t_str})  {color_cyan}{s_str}{color_reset}")
-            sys.stdout.flush()
-
-sys.stdout.write("\n")
-PYEOF
-
-set -eo pipefail
-
-if [ ! -f "$TARGET_FILE" ] || [ ! -s "$TARGET_FILE" ]; then
-    echo -e "${RED}❌ Download failed or archive is empty!${NC}"
     rm -rf "$TMP_DIR"
-    exit 1
-fi
+    return 1
+}
 
-unzip -q -o "$TARGET_FILE" -d "$TMP_DIR"
-
-echo -e "${BLUE}📂 Copying Anime4K shaders to ${TARGET}/shaders...${NC}"
-mkdir -p "$TARGET/shaders"
-cp -rf "$TMP_DIR"/shaders/* "$TARGET/shaders/" 2>/dev/null || true
-
-# Handle input.conf safely: preserve existing custom keybindings
-if [ -f "$TARGET/input.conf" ]; then
-    if ! grep -q "Anime4K" "$TARGET/input.conf" 2>/dev/null; then
-        echo -e "${BLUE}📝 Appending Anime4K hotkeys to existing ${TARGET}/input.conf...${NC}"
-        echo "" >> "$TARGET/input.conf"
-        cat "$TMP_DIR/input.conf" >> "$TARGET/input.conf"
+if ! download_binary; then
+    # Fallback to cargo if release binary is not yet available or failed
+    if command -v cargo >/dev/null 2>&1; then
+        printf "${YELLOW}ℹ️ Release binary not found, compiling from source with cargo...${NC}\n"
+        cargo install --git "https://github.com/${REPO}.git" --bin anime4k --root "${HOME}/.local"
     else
-        echo -e "${BLUE}ℹ️ Anime4K hotkeys already present in ${TARGET}/input.conf${NC}"
+        printf "${RED}❌ Failed to download pre-built binary and 'cargo' is not installed.${NC}\n"
+        printf "${YELLOW}Please install Rust (https://rustup.rs) or download the binary manually from:${NC}\n"
+        printf "  %s\n" "$GITHUB_RELEASES"
+        exit 1
     fi
-else
-    echo -e "${BLUE}📝 Creating ${TARGET}/input.conf with Anime4K hotkeys...${NC}"
-    cp "$TMP_DIR/input.conf" "$TARGET/input.conf"
 fi
 
-# Configure Anime4K default shader preset in mpv.conf
-if [ -f "$TARGET/mpv.conf" ] && grep -q "glsl-shaders=" "$TARGET/mpv.conf" 2>/dev/null; then
-    echo -e "${BLUE}⚙️ Updating glsl-shaders preset in ${TARGET}/mpv.conf...${NC}"
-    sed -i "s|^#* *glsl-shaders=.*|${MPV_GLSL_LINE}|" "$TARGET/mpv.conf"
-    sed -i "s|^# Optimized shaders.*|${HEADER_COMMENT}|" "$TARGET/mpv.conf"
-else
-    echo -e "${BLUE}⚙️ Appending glsl-shaders preset to ${TARGET}/mpv.conf...${NC}"
-    cat << INNER_EOF >> "$TARGET/mpv.conf"
+# 4. Check PATH and execute
+case ":$PATH:" in
+    *":${INSTALL_DIR}:"*) ;;
+    *)
+        printf "${YELLOW}⚠️ Note: %s is not in your PATH.${NC}\n" "$INSTALL_DIR"
+        printf "   Add it by running: ${CYAN}export PATH=\"\$HOME/.local/bin:\$PATH\"${NC}\n\n"
+        ;;
+esac
 
-${HEADER_COMMENT}
-${MPV_GLSL_LINE}
-INNER_EOF
-fi
-
-rm -rf "$TMP_DIR"
-echo -e "${GREEN}🎉 Anime4K shaders (${PRESET_NAME}) installed and configured for mpv!${NC}"
+exec "$TARGET_BIN" "$@"

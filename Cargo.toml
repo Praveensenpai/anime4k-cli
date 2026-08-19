@@ -1,0 +1,23 @@
+[package]
+name = "anime4k-cli"
+version = "1.0.0"
+edition = "2021"
+authors = ["Praveen <praveensenpai>"]
+description = "Modern automated Anime4K GLSL shader and configuration manager for mpv"
+license = "MIT"
+repository = "https://github.com/Praveensenpai/anime4k-cli"
+
+[[bin]]
+name = "anime4k"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+inquire = "0.7"
+indicatif = "0.17"
+ureq = { version = "2.10", features = ["tls"] }
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
+dirs = "5.0"
+colored = "2.1"
+anyhow = "1.0"
+tempfile = "3.14"
