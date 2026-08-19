@@ -9,7 +9,8 @@ pub struct DoctorReport {
     pub mpv_version: Option<String>,
     pub config_dir_exists: bool,
     pub shader_count: usize,
-    pub active_preset: Option<String>,
+    pub active_tier: Option<String>,
+    pub active_mode: Option<String>,
     pub input_conf_configured: bool,
     pub has_vo_gpu: bool,
     pub has_hwdec: bool,
@@ -75,7 +76,7 @@ pub fn run_doctor(paths: &MpvPaths) -> DoctorReport {
     }
 
     // 4. Check mpv.conf & Preset
-    let active_preset = config_mgr.detect_current_preset();
+    let (active_tier, active_mode) = config_mgr.detect_current_setup();
     let mpv_conf_path = paths.mpv_conf();
     let mut has_vo_gpu = false;
     let mut has_hwdec = false;
@@ -85,12 +86,20 @@ pub fn run_doctor(paths: &MpvPaths) -> DoctorReport {
         has_vo_gpu = content.contains("vo=gpu") || content.contains("vo=gpu-next");
         has_hwdec = content.contains("hwdec=");
 
-        if let Some(preset) = active_preset {
+        if let (Some(tier), Some(mode)) = (active_tier, active_mode) {
             println!(
-                "  {} Default Preset: {} (in {})",
+                "  {} Default Preset: {} — {} (in {})",
                 "✔️".green(),
-                preset.to_string().cyan().bold(),
+                tier.name().cyan().bold(),
+                mode.short_name().green().bold(),
                 "mpv.conf".bold()
+            );
+        } else if let Some(tier) = active_tier {
+            println!(
+                "  {} GPU Tier: {} (in {})",
+                "✔️".green(),
+                tier.name().cyan().bold(),
+                "input.conf".bold()
             );
         } else {
             println!(
@@ -146,18 +155,18 @@ pub fn run_doctor(paths: &MpvPaths) -> DoctorReport {
             "💡 Tip:".yellow().bold(),
             "`anime4k install`".cyan().bold()
         );
-    } else if active_preset.is_none() {
+    } else if active_mode.is_none() {
         println!(
-            "{} Run {} to activate a GPU preset.",
+            "{} Run {} to activate a GPU preset mode.",
             "💡 Tip:".yellow().bold(),
-            "`anime4k preset high` or `anime4k preset low`".cyan().bold()
+            "`anime4k mode <a|b|c|a+a|b+b|c+a|off>`".cyan().bold()
         );
     } else {
         println!(
             "{} Anime4K is fully installed and ready to use in mpv!",
             "🎉 All good:".green().bold()
         );
-        println!("   Press {} inside mpv to toggle presets.", "CTRL+0..6 / CTRL+1 / CTRL+2".cyan());
+        println!("   Press {} inside mpv to toggle modes live during playback.", "CTRL+1..6 / CTRL+0".cyan());
     }
 
     DoctorReport {
@@ -165,7 +174,8 @@ pub fn run_doctor(paths: &MpvPaths) -> DoctorReport {
         mpv_version,
         config_dir_exists,
         shader_count,
-        active_preset: active_preset.map(|p| p.to_string()),
+        active_tier: active_tier.map(|t| t.name().to_string()),
+        active_mode: active_mode.map(|m| m.short_name().to_string()),
         input_conf_configured,
         has_vo_gpu,
         has_hwdec,

@@ -1,8 +1,8 @@
 use crate::paths::MpvPaths;
-use crate::presets::Preset;
+use crate::presets::{GpuTier, ShaderMode};
 use anyhow::{Context, Result};
 use colored::*;
-use std::fs::{self};
+use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -49,7 +49,7 @@ impl<'a> ConfigManager<'a> {
     }
 
     /// Apply preset configuration to mpv.conf
-    pub fn configure_mpv_conf(&self, preset: Preset) -> Result<()> {
+    pub fn configure_mpv_conf(&self, tier: GpuTier, mode: ShaderMode) -> Result<()> {
         let conf_path = self.paths.mpv_conf();
         let backup = self.backup_file(&conf_path)?;
         if let Some(b) = backup {
@@ -62,13 +62,18 @@ impl<'a> ConfigManager<'a> {
             String::new()
         };
 
-        let managed_content = format!(
-            "{}\n{}\n{}\n{}",
-            BLOCK_START,
-            preset.header_comment(),
-            preset.glsl_shaders_line(),
-            BLOCK_END
-        );
+        let header = mode.header_comment(tier);
+        let managed_content = match mode.glsl_shaders_line(tier) {
+            Some(glsl_line) => {
+                format!("{}\n{}\n{}\n{}", BLOCK_START, header, glsl_line, BLOCK_END)
+            }
+            None => {
+                format!(
+                    "{}\n{}\n# Shaders are disabled by default at startup. Use hotkeys (CTRL+1..6) to activate.\n{}",
+                    BLOCK_START, header, BLOCK_END
+                )
+            }
+        };
 
         let new_content = Self::replace_or_append_block(&original_content, &managed_content, true);
 
@@ -76,7 +81,13 @@ impl<'a> ConfigManager<'a> {
             .with_context(|| format!("Failed to write to {:?}", conf_path))?;
         file.write_all(new_content.as_bytes())?;
 
-        println!("  {} Configured default preset in {}", "⚙️".green(), "mpv.conf".bold());
+        println!(
+            "  {} Configured default preset in {} ({}, {})",
+            "⚙️".green(),
+            "mpv.conf".bold(),
+            tier.name().bold(),
+            mode.short_name().cyan().bold()
+        );
         Ok(())
     }
 
@@ -186,7 +197,7 @@ impl<'a> ConfigManager<'a> {
             }
         }
 
-        // If legacy lines exist (e.g. from previous bash installer versions), strip them first
+        // If legacy lines exist (e.g. from previous installer versions), strip them first
         let stripped = Self::strip_legacy_lines(content, is_mpv_conf);
 
         let mut result = stripped.trim_end().to_string();
@@ -235,7 +246,7 @@ impl<'a> ConfigManager<'a> {
         for line in content.lines() {
             let trim = line.trim();
             if is_mpv_conf {
-                if trim.starts_with("# Optimized shaders for") && trim.contains("GPU: Mode") {
+                if trim.starts_with("# Optimized shaders for") && trim.contains("GPU:") {
                     continue;
                 }
                 if (trim.starts_with("glsl-shaders=") || trim.starts_with("#glsl-shaders="))
@@ -253,21 +264,52 @@ impl<'a> ConfigManager<'a> {
         lines.join("\n")
     }
 
-    /// Detect the currently active Anime4K preset from mpv.conf
-    pub fn detect_current_preset(&self) -> Option<Preset> {
+    /// Detect the currently configured GPU tier and Shader mode from mpv.conf and input.conf
+    pub fn detect_current_setup(&self) -> (Option<GpuTier>, Option<ShaderMode>) {
         let mpv_path = self.paths.mpv_conf();
-        if !mpv_path.exists() {
-            return None;
-        }
+        let input_path = self.paths.input_conf();
 
-        let content = fs::read_to_string(mpv_path).ok()?;
-        if content.contains("Restore_CNN_VL") || content.contains("Mode A (HQ)") {
-            Some(Preset::High)
-        } else if content.contains("Restore_CNN_M") || content.contains("Mode A (Fast)") {
-            Some(Preset::Low)
+        let mpv_content = if mpv_path.exists() {
+            fs::read_to_string(&mpv_path).unwrap_or_default()
+        } else {
+            String::new()
+        };
+
+        let input_content = if input_path.exists() {
+            fs::read_to_string(&input_path).unwrap_or_default()
+        } else {
+            String::new()
+        };
+
+        let combined = format!("{}\n{}", mpv_content, input_content);
+
+        let tier = if combined.contains("VL.glsl") || combined.contains("higher-end") || combined.contains("(HQ)") {
+            Some(GpuTier::High)
+        } else if combined.contains("Restore_CNN_M.glsl") || combined.contains("lower-end") || combined.contains("(Fast)") {
+            Some(GpuTier::Low)
         } else {
             None
-        }
+        };
+
+        let mode = if mpv_content.contains("disabled on startup") {
+            Some(ShaderMode::Disabled)
+        } else if mpv_content.contains("Mode A+A") || (mpv_content.contains("Restore_CNN_") && mpv_content.matches("Restore_CNN_").count() >= 2) {
+            Some(ShaderMode::ModeAA)
+        } else if mpv_content.contains("Mode B+B") || (mpv_content.contains("Restore_CNN_Soft_") && mpv_content.matches("Restore_CNN_Soft_").count() >= 2) {
+            Some(ShaderMode::ModeBB)
+        } else if mpv_content.contains("Mode C+A") || (mpv_content.contains("Upscale_Denoise_") && mpv_content.contains("Restore_CNN_")) {
+            Some(ShaderMode::ModeCA)
+        } else if mpv_content.contains("Mode B") || mpv_content.contains("Restore_CNN_Soft_") {
+            Some(ShaderMode::ModeB)
+        } else if mpv_content.contains("Mode C") || mpv_content.contains("Upscale_Denoise_") {
+            Some(ShaderMode::ModeC)
+        } else if mpv_content.contains("Mode A") || mpv_content.contains("glsl-shaders=") && mpv_content.contains("Anime4K_") {
+            Some(ShaderMode::ModeA)
+        } else {
+            None
+        };
+
+        (tier, mode)
     }
 
     /// Count installed Anime4K shader files

@@ -1,4 +1,4 @@
-use crate::presets::Preset;
+use crate::presets::{GpuTier, ShaderMode};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
@@ -8,7 +8,7 @@ use std::path::PathBuf;
     author = "Praveen <praveensenpai>",
     version = "1.0.0",
     about = "📺 Modern automated Anime4K GLSL shader and configuration manager for mpv",
-    long_about = "Anime4K is a set of open-source, high-quality real-time anime upscaling and restoration shaders for mpv.\nThis CLI automates installation, preset switching, health checks, and hotkeys configuration."
+    long_about = "Anime4K is a set of open-source, high-quality real-time anime upscaling and restoration shaders for mpv.\nThis CLI automates installation, preset & mode switching, health checks, and hotkeys configuration."
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -21,11 +21,14 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Install Anime4K shaders, hotkeys, and configure mpv.conf
+    /// Install Anime4K shaders, hotkeys, and configure default mode in mpv.conf
     Install(InstallArgs),
 
-    /// Switch active Anime4K preset in mpv.conf instantly
+    /// Switch GPU preset tier (high-end HQ vs low-end Fast)
     Preset(PresetArgs),
+
+    /// Change default startup shader mode in mpv.conf (A, B, C, A+A, B+B, C+A, or Off)
+    Mode(ModeArgs),
 
     /// Remove Anime4K shaders and clean up configuration
     Uninstall(UninstallArgs),
@@ -39,9 +42,13 @@ pub enum Commands {
 
 #[derive(Args, Debug)]
 pub struct InstallArgs {
-    /// GPU preset to install (high / low)
+    /// GPU tier to install (high / low)
+    #[arg(short, long, alias = "tier", value_enum)]
+    pub preset: Option<TierArg>,
+
+    /// Default shader mode to enable at startup (a, b, c, a+a, b+b, c+a, or off)
     #[arg(short, long, value_enum)]
-    pub preset: Option<PresetArg>,
+    pub mode: Option<ModeArg>,
 
     /// Skip interactive prompts and accept defaults
     #[arg(short, long)]
@@ -50,9 +57,20 @@ pub struct InstallArgs {
 
 #[derive(Args, Debug)]
 pub struct PresetArgs {
-    /// Preset to switch to (high / low)
+    /// GPU preset tier (high / low)
     #[arg(value_enum)]
-    pub preset: PresetArg,
+    pub tier: TierArg,
+
+    /// Optional shader mode to set (default: Mode A)
+    #[arg(short, long, value_enum)]
+    pub mode: Option<ModeArg>,
+}
+
+#[derive(Args, Debug)]
+pub struct ModeArgs {
+    /// Shader mode to activate at startup (a, b, c, a+a, b+b, c+a, or off)
+    #[arg(value_enum)]
+    pub mode: ModeArg,
 }
 
 #[derive(Args, Debug)]
@@ -67,18 +85,50 @@ pub struct UninstallArgs {
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PresetArg {
-    #[value(name = "high", alias = "hq", alias = "higher")]
+pub enum TierArg {
+    #[value(name = "high", alias = "hq", alias = "higher", alias = "higher-end")]
     High,
-    #[value(name = "low", alias = "fast", alias = "lower")]
+    #[value(name = "low", alias = "fast", alias = "lower", alias = "lower-end")]
     Low,
 }
 
-impl From<PresetArg> for Preset {
-    fn from(arg: PresetArg) -> Self {
+impl From<TierArg> for GpuTier {
+    fn from(arg: TierArg) -> Self {
         match arg {
-            PresetArg::High => Preset::High,
-            PresetArg::Low => Preset::Low,
+            TierArg::High => GpuTier::High,
+            TierArg::Low => GpuTier::Low,
+        }
+    }
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ModeArg {
+    #[value(name = "a", alias = "mode-a", alias = "mode_a", alias = "1")]
+    ModeA,
+    #[value(name = "b", alias = "mode-b", alias = "mode_b", alias = "2")]
+    ModeB,
+    #[value(name = "c", alias = "mode-c", alias = "mode_c", alias = "3")]
+    ModeC,
+    #[value(name = "a+a", alias = "aa", alias = "mode-a+a", alias = "4")]
+    ModeAA,
+    #[value(name = "b+b", alias = "bb", alias = "mode-b+b", alias = "5")]
+    ModeBB,
+    #[value(name = "c+a", alias = "ca", alias = "mode-c+a", alias = "6")]
+    ModeCA,
+    #[value(name = "off", alias = "none", alias = "disabled", alias = "0", alias = "clear")]
+    Disabled,
+}
+
+impl From<ModeArg> for ShaderMode {
+    fn from(arg: ModeArg) -> Self {
+        match arg {
+            ModeArg::ModeA => ShaderMode::ModeA,
+            ModeArg::ModeB => ShaderMode::ModeB,
+            ModeArg::ModeC => ShaderMode::ModeC,
+            ModeArg::ModeAA => ShaderMode::ModeAA,
+            ModeArg::ModeBB => ShaderMode::ModeBB,
+            ModeArg::ModeCA => ShaderMode::ModeCA,
+            ModeArg::Disabled => ShaderMode::Disabled,
         }
     }
 }
