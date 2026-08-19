@@ -12,7 +12,7 @@ pub fn download_file(url: &str, output_path: &Path, label: &str) -> Result<()> {
     let agent = ureq::AgentBuilder::new()
         .timeout_connect(Duration::from_secs(15))
         .timeout_read(Duration::from_secs(60))
-        .user_agent("anime4k-mpv-installer/1.0")
+        .user_agent("anime4k-cli/1.0")
         .build();
 
     let response = agent
