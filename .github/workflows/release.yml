@@ -34,7 +34,7 @@ jobs:
             asset_name: anime4k-darwin-arm64.tar.gz
             use_cross: false
 
-          - os: macos-13
+          - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: anime4k
             asset_name: anime4k-darwin-x86_64.tar.gz
