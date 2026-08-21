@@ -28,24 +28,6 @@ jobs:
             asset_name: anime4k-linux-aarch64.tar.gz
             use_cross: true
 
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            artifact_name: anime4k
-            asset_name: anime4k-darwin-arm64.tar.gz
-            use_cross: false
-
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            artifact_name: anime4k
-            asset_name: anime4k-darwin-x86_64.tar.gz
-            use_cross: false
-
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_name: anime4k.exe
-            asset_name: anime4k-windows-x86_64.zip
-            use_cross: false
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -67,18 +49,10 @@ jobs:
         if: matrix.use_cross
         run: cross build --release --target ${{ matrix.target }}
 
-      - name: Package asset (Unix)
-        if: matrix.os != 'windows-latest'
+      - name: Package asset
         run: |
           cd target/${{ matrix.target }}/release
           tar -czf ../../../${{ matrix.asset_name }} ${{ matrix.artifact_name }}
-
-      - name: Package asset (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          cd target/${{ matrix.target }}/release
-          Compress-Archive -Path ${{ matrix.artifact_name }} -DestinationPath ../../../${{ matrix.asset_name }}
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2

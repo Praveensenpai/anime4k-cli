@@ -19,33 +19,6 @@ impl MpvPaths {
     }
 
     fn default_mpv_dir() -> PathBuf {
-        #[cfg(target_os = "windows")]
-        {
-            if let Some(appdata) = dirs::config_dir() {
-                let p = appdata.join("mpv");
-                return p;
-            }
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            if let Some(home) = dirs::home_dir() {
-                let dot_config = home.join(".config").join("mpv");
-                if dot_config.exists() {
-                    return dot_config;
-                }
-                let app_support = home
-                    .join("Library")
-                    .join("Application Support")
-                    .join("mpv");
-                if app_support.exists() {
-                    return app_support;
-                }
-                return dot_config;
-            }
-        }
-
-        // Linux / Unix / Fallback
         if let Some(config_dir) = dirs::config_dir() {
             config_dir.join("mpv")
         } else if let Some(home) = dirs::home_dir() {

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 #[command(
     name = "anime4k",
     author = "Praveen <praveensenpai>",
-    version = "1.0.0",
+    version = "1.0.2",
     about = "📺 Modern automated Anime4K GLSL shader and configuration manager for mpv",
     long_about = "Anime4K is a set of open-source, high-quality real-time anime upscaling and restoration shaders for mpv.\nThis CLI automates installation, preset & mode switching, health checks, and hotkeys configuration."
 )]

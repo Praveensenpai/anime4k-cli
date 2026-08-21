@@ -32,13 +32,8 @@ case "$OS" in
     linux)
         TARGET_OS="linux"
         ;;
-    darwin)
-        TARGET_OS="darwin"
-        ;;
     *)
-        printf "${RED}❌ Unsupported operating system: %s${NC}\n" "$OS"
-        printf "${YELLOW}💡 On Windows, run in PowerShell:${NC}\n"
-        printf "   irm https://raw.githubusercontent.com/%s/main/install.ps1 | iex\n" "$REPO"
+        printf "${RED}❌ Unsupported operating system: %s (Linux only)${NC}\n" "$OS"
         exit 1
         ;;
 esac

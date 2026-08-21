@@ -2,7 +2,7 @@
 
 > Modern, blazing-fast automated Anime4K GLSL shader and configuration manager for **mpv**.
 
-Zero runtime dependencies. Written in Rust. Native support for Linux, macOS, and Windows.
+Zero runtime dependencies. Written in Rust. Built for Linux.
 
 ---
 
@@ -14,20 +14,15 @@ Zero runtime dependencies. Written in Rust. Native support for Linux, macOS, and
 - ⚡ **Instant Preset Switcher**: Switch between HQ and Fast presets on the fly (`anime4k preset high` / `anime4k preset low`).
 - 🩺 **Doctor / Health Check**: Diagnose mpv version, shader files, video output driver (`vo=gpu-next`), and keybindings with `anime4k doctor`.
 - 🗑️ **Clean Uninstaller**: Safely removes managed configuration blocks and shader files with `anime4k uninstall`.
-- 🪟 **Cross-Platform**: Linux (x86_64, aarch64), macOS (Intel, Apple Silicon), and native Windows (`.exe` / PowerShell).
+- 🐧 **Linux First**: Native binaries for Linux (x86_64 and aarch64).
 
 ---
 
 ## 📦 Quick Start
 
-### 🐧 Linux & 🍎 macOS
+### 🐧 Automatic Install
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Praveensenpai/anime4k-cli/main/install.sh | sh
-```
-
-### 🪟 Windows (PowerShell)
-```powershell
-irm https://raw.githubusercontent.com/Praveensenpai/anime4k-cli/main/install.ps1 | iex
 ```
 
 ### 🦀 Cargo
